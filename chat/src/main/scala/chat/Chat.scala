@@ -4,22 +4,24 @@ import scala.collection.mutable.HashMap
 import scala.concurrent.Channel
 import scalatags.JsDom._
 import scalatags.JsDom.all._
-import scala.async.Async.async
 import scala.concurrent.ExecutionContext.Implicits.global
 import hyperflux.annotation._
 import hyperflux.SessionID
+import hyperflux.ProxyData
+import hyperflux.protocol_helpers._
 import hyperflux.routing_helpers._
 import hyperflux.session_helpers._
 import hyperflux.template_helpers._
+import upickle.default._
 
 /*
  * Server section
- */
+ */ 
 
 @Server("localhost", 24105)
 object ChatServer {
 
-  var users = new HashMap[SessionID, (String, Channel[String])]
+  private val users = new HashMap[SessionID, (String, Channel[String])]
 
   def sayHello(name: String): Boolean = {
     if (users.valuesIterator contains name) {
@@ -80,6 +82,7 @@ object ChatClient {
    */
   def nameEntered() {
     val name = nameInputBox.value
+    FAKE_PROXY__ChatServer_sayHello(name)
     if (ChatServer sayHello name) {
       redirect(chatWindow)
     } else {
@@ -167,4 +170,11 @@ object ChatClient {
       sendButton
     )
   )
+  
+  case class FAKE_PROXY__ChatServer_sayHello__DATA(name: String)
+  def FAKE_PROXY__ChatServer_sayHello(name: String): Boolean = {
+    val data = new FAKE_PROXY__ChatServer_sayHello__DATA(name)
+    val ret = callServer("ChatServer", "sayHello", write(data))
+    read[Boolean](ret)
+  }
 }
