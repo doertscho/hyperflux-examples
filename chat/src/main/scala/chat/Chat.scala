@@ -2,23 +2,22 @@ package chat
 
 import scala.collection.mutable.HashMap
 import scala.concurrent.Channel
+import scala.async.Async.async
 import scalatags.JsDom._
 import scalatags.JsDom.all._
 import scala.concurrent.ExecutionContext.Implicits.global
+import scala.scalajs.js.JSApp
 import hyperflux.annotation._
 import hyperflux.SessionID
-import hyperflux.ProxyData
-import hyperflux.protocol_helpers._
 import hyperflux.routing_helpers._
 import hyperflux.session_helpers._
 import hyperflux.template_helpers._
-import upickle.default._
 
 /*
  * Server section
- */ 
+ */
 
-@Server("localhost", 24105)
+@Server("http://localhost", 24105)
 object ChatServer {
 
   private val users = new HashMap[SessionID, (String, Channel[String])]
@@ -67,13 +66,7 @@ object ChatServer {
 @Client
 object ChatClient {
 
-  /*
-   * Main entry point: Shows the login page
-   * As no client-side scripts have to be executed on startup, there are no
-   * further method calls
-   */
-  @Page
-  def main(): Document = loginPage
+  def main() { }
 
   /*
    * This method is called when the submit button on the login page is pressed
@@ -81,13 +74,12 @@ object ChatClient {
    * If the login was successful, it redirects the client to the actual chat
    */
   def nameEntered() {
-    val name = nameInputBox.value
-    FAKE_PROXY__ChatServer_sayHello(name)
+    val name = ChatInterface.nameInputBox.value
     if (ChatServer sayHello name) {
-      redirect(chatWindow)
+      redirect(ChatInterface.chatPage)
     } else {
-      errorSpace.innerHTML = "Fehler bei der Anmeldung!"
-      errorSpace.className = "error"
+      ChatInterface.errorSpace.innerHTML = "Fehler bei der Anmeldung!"
+      ChatInterface.errorSpace.className = "error"
     }
   }
 
@@ -96,17 +88,13 @@ object ChatClient {
    * When this page is opened, everything in this method's body is executed
    * Finally, the chatPage document is returned
    */
-  @Page
-  def chatWindow(): Document = {
+  def chatWindow() {
     // spawn message receiver "thread"
-    /*val receiveLoop = async {
-      var msg = new String()
-      do {
-        msg = ChatServer readMessage()
-        chatLog.innerHTML += br.render + msg
-      } while (msg != ChatServer.ERROR_MSG)
-    }*/
-    chatPage
+    var msg = ""
+    do {
+      msg = ChatServer.readMessage()
+      ChatInterface.chatLog.innerHTML += br.render + msg
+    } while (msg != ChatServer.ERROR_MSG)
   }
 
   /*
@@ -114,27 +102,36 @@ object ChatClient {
    * It retrieves the entered message and hands it to the server
    */
   def messageEntered() {
-    val msg = messageInputBox.value
+    val msg = ChatInterface.messageInputBox.value
     ChatServer writeMessage msg
   }
+}
 
-  /*
-   * Presentation section
-   */
-
+/*
+ * Presentation section
+ */
+@Interface
+object ChatInterface {
+  
   // login area
+  @Element
   lazy val errorSpace = div(
     cls := "error_hidden"
-  ) render
+  ).render
+  
+  @Element
   lazy val nameInputBox = input(
     tpe := "text",
     placeholder := "Please type your name to start .."
-  ) render
+  ).render
+  
+  @Element
   lazy val startButton = button(
     value := "Start",
-    onclick := { () => nameEntered() }
-  ) render
+    onclick := ChatClient.nameEntered
+  ).render
 
+  @Page
   lazy val loginPage = document(
     "The Hyperflux chat",
     h1("Welcome to the Hyperflux chat"),
@@ -146,19 +143,23 @@ object ChatClient {
   )
 
   // actual chat
+  @Element
   lazy val chatLog = div(
     overflow := "scroll",
     height := 400
-  ) render
+  ).render
+  @Element
   lazy val messageInputBox = input(
     tpe := "text",
     placeholder := "Type your message here .."
-  ) render
+  ).render
+  @Element
   lazy val sendButton = button(
     value := "Send",
-    onclick := { () => messageEntered() }
-  ) render
+    onclick := ChatClient.messageEntered
+  ).render
 
+  @Page
   lazy val chatPage = document(
     "The Hyperflux chat",
     h1("The Hyperflux chat"),
@@ -168,13 +169,7 @@ object ChatClient {
     div(
       messageInputBox,
       sendButton
-    )
+    ),
+    div(onload := ChatClient.chatWindow)
   )
-  
-  case class FAKE_PROXY__ChatServer_sayHello__DATA(name: String)
-  def FAKE_PROXY__ChatServer_sayHello(name: String): Boolean = {
-    val data = new FAKE_PROXY__ChatServer_sayHello__DATA(name)
-    val ret = callServer("ChatServer", "sayHello", write(data))
-    read[Boolean](ret)
-  }
 }
