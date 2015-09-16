@@ -5,8 +5,8 @@ import scala.concurrent.Channel
 import scala.async.Async.async
 import scalatags.JsDom._
 import scalatags.JsDom.all._
-import scala.concurrent.ExecutionContext.Implicits.global
 import scala.scalajs.js.JSApp
+import org.scalajs.dom.console
 import hyperflux.annotation._
 import hyperflux.SessionID
 import hyperflux.routing_helpers._
@@ -23,21 +23,24 @@ object ChatServer {
   private val users = new HashMap[SessionID, (String, Channel[String])]
 
   def sayHello(name: String): Boolean = {
-    if (users.valuesIterator contains name) {
+    println(s"New user tries to say hello with SID $SID and name '$name'")
+    if (users.valuesIterator exists (_._1 == name)) {
+      println(s"Name is taken!")
       false
     } else {
       users += (SID -> (name, new Channel[String]))
-      println("New user '" + name + "' with SID " + SID)
+      println(s"Name available, new user '$name' with SID $SID")
       true
     }
   }
 
   def writeMessage(msg: String) {
-    println("New message from " + SID + ": " + msg)
     // this lookup serves two purposes: it checks whether the sending client
     // is registered, and if it is, it retrieves the matching user name
+    println(s"Incoming message from $SID")
     users get SID match {
       case Some((name, _)) => {
+        println(s"Sender identified as '$name', message: $msg")
         val text = name + ": " + msg
         // place message in every user's channel
         users foreach {
@@ -50,13 +53,22 @@ object ChatServer {
     }
   }
 
-  val ERROR_MSG = "ERR/NOT_REGISTERED"
   def readMessage(): String = {
     users get SID match {
-      case Some((_, chan)) => chan read
-      case _ => ERROR_MSG
+      case Some((name, chan)) => {
+        println(s"User '$name' is waiting for new messages ..")
+        chan.read
+      }
+      case _ => {
+        println(s"readMessage request from unknown user with SID $SID")
+        ChatShared.ERROR_MSG
+      }
     }
   }
+}
+
+object ChatShared {
+  val ERROR_MSG = "ERR/NOT_REGISTERED"
 }
 
 /*
@@ -64,7 +76,7 @@ object ChatServer {
  */
 
 @Client
-object ChatClient {
+object ChatClient { 
 
   def main() { }
 
@@ -74,12 +86,11 @@ object ChatClient {
    * If the login was successful, it redirects the client to the actual chat
    */
   def nameEntered() {
-    val name = ChatInterface.nameInputBox.value
-    if (ChatServer sayHello name) {
+    if (ChatServer sayHello (ChatInterface.nameInputBox.value)) {
       redirect(ChatInterface.chatPage)
     } else {
       ChatInterface.errorSpace.innerHTML = "Fehler bei der Anmeldung!"
-      ChatInterface.errorSpace.className = "error"
+      ChatInterface.errorSpace.className = "text-danger"
     }
   }
 
@@ -88,13 +99,14 @@ object ChatClient {
    * When this page is opened, everything in this method's body is executed
    * Finally, the chatPage document is returned
    */
-  def chatWindow() {
-    // spawn message receiver "thread"
-    var msg = ""
-    do {
+  def chatWindow() { 
+    console.log("Starting receiver loop ..")
+    var msg = "--- Welcome to the chat! ---"
+    while (msg != ChatShared.ERROR_MSG) {
+      ChatInterface.chatLog.innerHTML =
+        div(msg) + ChatInterface.chatLog.innerHTML
       msg = ChatServer.readMessage()
-      ChatInterface.chatLog.innerHTML += br.render + msg
-    } while (msg != ChatServer.ERROR_MSG)
+    }
   }
 
   /*
@@ -102,8 +114,9 @@ object ChatClient {
    * It retrieves the entered message and hands it to the server
    */
   def messageEntered() {
-    val msg = ChatInterface.messageInputBox.value
-    ChatServer writeMessage msg
+    ChatServer writeMessage (ChatInterface.messageInputBox.value)
+    ChatInterface.messageInputBox.value = ""
+    ChatInterface.messageInputBox.focus()
   }
 }
 
@@ -112,7 +125,7 @@ object ChatClient {
  */
 @Interface
 object ChatInterface {
-  
+
   // login area
   @Element
   lazy val errorSpace = div(
@@ -121,14 +134,18 @@ object ChatInterface {
   
   @Element
   lazy val nameInputBox = input(
+    cls := "form-control",
     tpe := "text",
-    placeholder := "Please type your name to start .."
+    placeholder := "Please type your name to start ..",
+    autofocus
   ).render
   
   @Element
   lazy val startButton = button(
-    value := "Start",
+    cls := "btn btn-primary",
     onclick := ChatClient.nameEntered
+  )(
+    "Start"
   ).render
 
   @Page
@@ -150,13 +167,17 @@ object ChatInterface {
   ).render
   @Element
   lazy val messageInputBox = input(
+    cls := "form-control",
     tpe := "text",
-    placeholder := "Type your message here .."
+    placeholder := "Type your message here ..",
+    autofocus
   ).render
   @Element
   lazy val sendButton = button(
-    value := "Send",
-    onclick := ChatClient.messageEntered
+    cls := "btn btn-primary",
+    onclick := ChatClient.messageEntered 
+  )(
+    "Send"
   ).render
 
   @Page
@@ -170,6 +191,9 @@ object ChatInterface {
       messageInputBox,
       sendButton
     ),
-    div(onload := ChatClient.chatWindow)
+    script(ChatClient.chatWindow)
   )
+  
+  @Page
+  lazy val main = loginPage
 }

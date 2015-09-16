@@ -12,17 +12,15 @@ lazy val mini = crossProject.
     name := "hyperflux-mini-app",
     version := "1.0",
     scalaVersion := "2.11.7",
-    libraryDependencies ++= Seq(
-      "org.http4s" %% "http4s-dsl" % "0.10.0",
-      "org.http4s" %% "http4s-blaze-server" % "0.10.0",
-      "hyperflux" %%% "hyperflux-framework" % "0.1"
-    ),
+    libraryDependencies += "hyperflux" %%% "hyperflux-framework" % "0.1",
     autoCompilerPlugins := true,
     addCompilerPlugin("hyperflux" %% "hyperflux-plugin" % "0.1")
-  ).
-  jsSettings(
-  ).
-  jvmSettings(
+  )
+  .jvmSettings(
+    libraryDependencies ++= Seq(
+      "org.http4s" %% "http4s-dsl" % "0.10.0",
+      "org.http4s" %% "http4s-blaze-server" % "0.10.0"
+    )
   )
 
 lazy val miniJS = mini.js

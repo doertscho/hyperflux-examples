@@ -3,13 +3,9 @@ package mini
 import hyperflux.annotation._
 import hyperflux.template_helpers._
 import scala.scalajs.js
-import scala.scalajs.js.annotation._
 import org.scalajs.dom.alert
 import org.scalajs.dom.console
 import scalatags.JsDom.all._
-import scala.concurrent._
-import scala.util.{Success, Failure}
-import ExecutionContext.Implicits.global
  
 /*
  * Server section
@@ -28,7 +24,6 @@ object MiniAppServer {
     s"Message #$clientNo/$num: l${"ol" * clientNo}"
   }
 }
- 
 
 /*
  * Client logic section
